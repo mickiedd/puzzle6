@@ -97,8 +97,8 @@ class Puzzle6Env(gym.Env):
     pole = rendering.FilledPolygon([(l,b), (l,t), (r,t), (r,b)])
     pole.set_color(.8,.6,.4)
     axleoffset =cartheight/4.0
-    self.poletrans = rendering.Transform(translation=(0, axleoffset))
-    pole.add_attr(self.poletrans)
+    pole.trans = rendering.Transform(translation=(0, axleoffset))
+    pole.add_attr(pole.trans)
     self.viewer.add_geom(pole)
     return pole
     
@@ -113,13 +113,9 @@ class Puzzle6Env(gym.Env):
     screen_height = 400
 
     world_width = self.x_threshold*2
-    scale = screen_width/world_width
-    carty = 100 # TOP OF CART
-    polewidth = 10.0
-    polelen = scale * 1.0
-    
+    pole = None
     if self.viewer == None:
         self.viewer = rendering.Viewer(screen_width, screen_height)
-        self.get_chess()
-    self.poletrans.set_translation(50, 25)
+        pole = self.get_chess()
+    pole.trans.set_translation(50, 25)
     return self.viewer.render(return_rgb_array = mode=='rgb_array')
