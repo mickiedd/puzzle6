@@ -72,10 +72,10 @@ class Puzzle6Env(gym.Env):
 
     #statics
     self.failure_count = 0
+    self.train_count = 0
 
   def _step(self, action):
     #print("step", action)
-    # 729=>900 728=>888
     action_item = self.action_list[action] #turbo
 
     from_row = action_item[0]
@@ -105,6 +105,7 @@ class Puzzle6Env(gym.Env):
 
     ob = np.zeros(81)
 
+    max_color_num = 0
     if self.data_stream != '':
       stream_list = self.data_stream.replace("b'", "").split(',')
       for current_data_stream in stream_list: #0|0|color(9)
@@ -118,22 +119,23 @@ class Puzzle6Env(gym.Env):
           #color
           chess_color_num = self.color_num_dict[chess_color_str]
           ob[chess_position_x * 9 + chess_position_y] = chess_color_num
+          if chess_color_num > max_color_num:
+            max_color_num = chess_color_num
+    ob = ob / max_color_num
 
     reward = 0
     if r == 0:
       reward = 1
-    if r == 1:
-      reward = 0
-    if r == 2:
-      reward = -1000
-    if r == 3:
+    else:
       reward = -10000
 
     if reward > 0:
-      print("Success after ", self.failure_count, " failures !")
+      print("Success after ", self.failure_count, " failures ! \nTrain: ", self.train_count)
       self.failure_count = 0
     else:
       self.failure_count = self.failure_count + 1
+
+    self.train_count = self.train_count + 1
 
     #print("action:", action, "reward:", reward)
     return ob, reward, self.episode_over, {}
