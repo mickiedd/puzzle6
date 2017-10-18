@@ -21,23 +21,6 @@ class Puzzle6Env(gym.Env):
 
     print("puzzle6 inited")
 
-    chessPropertiesTablePath = b"/home/mickie/course/puzzle6/data/LogicData/ChessPropertiesTable.bin"
-    stageConfigPath = b"/home/mickie/Downloads/stage_0000_0000.bin"
-    commonPath = b"/home/mickie/course/puzzle6/data/DataConfig/"
-
-    self.dll = cdll.LoadLibrary('/home/mickie/Downloads/libwe6remove.so')
-
-    #create game instance
-    self.gameInstanceRet = self.dll.we6_game_new_ctx('', 0)
-
-    #start the game
-    self.dll.we6_game_quick_run(self.gameInstanceRet, chessPropertiesTablePath, stageConfigPath, commonPath)
-    len3 = c_int()
-    print("Original:")
-    print(c_char_p(self.dll.we6_board_nodes_data(self.gameInstanceRet, byref(len3))).value)
-    print(len3)
-    print("=========")
-
     #action id to real actions(x, y, position)
     action_count = 9 * 9 * 3
     self.action_list = []
@@ -49,11 +32,11 @@ class Puzzle6Env(gym.Env):
     #len self.action_list 243
 
     self.episode_over = False
-    self.observation_space = np.zeros(81)
+    high = np.zeros(81) + 1.0
+    self.observation_space = spaces.Box(np.zeros(81), high)
+    #self.observation_space = np.zeros(81)
     self.action_space = spaces.Discrete(len(self.action_list))
 
-    #data
-    self.data_stream = ""
 
     #color dictionary
     yellow = self.get_color(255, 255, 128)
@@ -73,6 +56,9 @@ class Puzzle6Env(gym.Env):
     #statics
     self.failure_count = 0
     self.train_count = 0
+
+
+    self.reset()
 
   def _step(self, action):
     #print("step", action)
@@ -98,31 +84,14 @@ class Puzzle6Env(gym.Env):
     len3 = c_int()
     self.data_stream = str(c_char_p(self.dll.we6_board_nodes_data(self.gameInstanceRet, byref(len3))).value)
 
-    #print(data_stream)
+    #print(self.data_stream)
     #print(len3)
 
 
 
-    ob = np.zeros(81)
+    ob = self.get_state()
 
-    max_color_num = 0
-    if self.data_stream != '':
-      stream_list = self.data_stream.replace("b'", "").split(',')
-      for current_data_stream in stream_list: #0|0|color(9)
-        #current data
-        if current_data_stream != "'":
-          #print(current_data_stream)
-          current_data_stream_list = current_data_stream.split('|')
-          chess_position_x = int(current_data_stream_list[1])
-          chess_position_y = int(current_data_stream_list[0])
-          chess_color_str = current_data_stream_list[2]
-          #color
-          chess_color_num = self.color_num_dict[chess_color_str]
-          ob[chess_position_x * 9 + chess_position_y] = chess_color_num
-          if chess_color_num > max_color_num:
-            max_color_num = chess_color_num
-    ob = ob / max_color_num
-
+    #print(ob)
     reward = 0
     if r == 0:
       reward = 1
@@ -141,8 +110,29 @@ class Puzzle6Env(gym.Env):
     return ob, reward, self.episode_over, {}
   def _reset(self):
     print("reset")
-    self.observation_space = np.zeros(81)
-    return self.observation_space
+
+    #data
+    self.data_stream = ""
+
+    chessPropertiesTablePath = b"/home/mickie/course/puzzle6/data/LogicData/ChessPropertiesTable.bin"
+    stageConfigPath = b"/home/mickie/Downloads/stage_0000_0000.bin"
+    commonPath = b"/home/mickie/course/puzzle6/data/DataConfig/"
+
+    self.dll = cdll.LoadLibrary('/home/mickie/Downloads/libwe6remove.so')
+
+    # create game instance
+    self.gameInstanceRet = self.dll.we6_game_new_ctx('', 0)
+
+    # start the game
+    self.dll.we6_game_quick_run(self.gameInstanceRet, chessPropertiesTablePath, stageConfigPath, commonPath)
+    len3 = c_int()
+    self.data_stream = str(c_char_p(self.dll.we6_board_nodes_data(self.gameInstanceRet, byref(len3))).value)
+    print("Original:")
+    print(self.data_stream)
+    print(len3)
+    print("=========")
+
+    return self.get_state()
   def get_chess(self, w, h):
     l,r,t,b = -w/2, w/2, h/2, -h/2
     pole = rendering.FilledPolygon([(l,b), (l,t), (r,t), (r,b)])
@@ -151,6 +141,30 @@ class Puzzle6Env(gym.Env):
     pole.add_attr(pole.trans)
     self.viewer.add_geom(pole)
     return pole
+
+  def get_state(self):
+    ob = np.zeros(81)
+
+    max_color_num = 0
+    if self.data_stream != '':
+      stream_list = self.data_stream.replace("b'", "").split(',')
+      for current_data_stream in stream_list:  # 0|0|color(9)
+        # current data
+        if current_data_stream != "'":
+          # print(current_data_stream)
+          current_data_stream_list = current_data_stream.split('|')
+          chess_position_x = int(current_data_stream_list[1])
+          chess_position_y = int(current_data_stream_list[0])
+          chess_color_str = current_data_stream_list[2]
+          # color
+          chess_color_num = self.color_num_dict[chess_color_str]
+          index = chess_position_x * 9 + chess_position_y
+          ob[index] = chess_color_num
+          # print(index, chess_color_str, ob[index])
+          if chess_color_num > max_color_num:
+            max_color_num = chess_color_num
+    ob = ob / max_color_num
+    return ob
 
   def _render(self, mode='human', close=False):
     print("render")
