@@ -44,5 +44,8 @@ for i_episode in range(100):
 
         observation = observation_
         total_steps += 1
+
+        if total_steps > 150000:
+            break
 # 最后输出 cost 曲线
 RL.plot_cost()
