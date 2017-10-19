@@ -38,6 +38,7 @@ class Puzzle6Env(gym.Env):
           self.action_list.append(action_item)
     #len self.action_list 243
 
+    self.gameInstanceRet = None;
     self.episode_over = False
     high = np.zeros(self.chesssum) + 1.0
     self.observation_space = spaces.Box(np.zeros(self.chesssum), high)
@@ -84,7 +85,7 @@ class Puzzle6Env(gym.Env):
     value1 = 0
     value2 = 0
     op = 0
-    print("Take action ", self.train_count, " from:", from_row, from_col, ", to:", to_row, to_col)
+    #print("Take action ", self.train_count, " from:", from_row, from_col, ", to:", to_row, to_col)
     #get the result from that action
     r = int(c_int(self.dll.we6_game_input_by_detail(self.gameInstanceRet, op, item_type, from_row, from_col, to_row, to_col, value1, value2)).value)
 
@@ -92,7 +93,7 @@ class Puzzle6Env(gym.Env):
     self.data_stream = str(c_char_p(self.dll.we6_board_nodes_data(self.gameInstanceRet, byref(len3))).value)
 
     #print(self.data_stream)
-    print(len3)
+    #print(len3)
 
 
 
@@ -134,6 +135,12 @@ class Puzzle6Env(gym.Env):
     self.dll = cdll.LoadLibrary('/home/mickie/Downloads/libwe6remove.so')
 
     # create game instance
+    # release old one first
+    if self.gameInstanceRet != None:
+      print("release old one first.")
+      self.dll.we6_game_delete_ctx(self.gameInstanceRet)
+
+    print("create new game instance.")
     self.gameInstanceRet = self.dll.we6_game_new_ctx('', 0)
 
     # start the game
