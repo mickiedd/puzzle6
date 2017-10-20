@@ -21,8 +21,8 @@ class Puzzle6Env(gym.Env):
 
     print("puzzle6 inited")
 
-    self.rowsum = 3
-    self.colsum = 3
+    self.rowsum = 9
+    self.colsum = 9
     self.chesssum = self.rowsum * self.colsum
     self.directsum = 6
     self.halfdirectsum = int(self.directsum / 1)
@@ -40,8 +40,9 @@ class Puzzle6Env(gym.Env):
 
     self.gameInstanceRet = None;
     self.episode_over = False
-    high = np.zeros(self.chesssum) + 1.0
-    self.observation_space = spaces.Box(np.zeros(self.chesssum), high)
+    low = np.zeros((self.rowsum, self.colsum, 3))
+    high = np.zeros((self.rowsum, self.colsum, 3)) + 1.0
+    self.observation_space = spaces.Box(low, high)
     #self.observation_space = np.zeros(81)
     self.action_space = spaces.Discrete(len(self.action_list))
 
@@ -64,12 +65,14 @@ class Puzzle6Env(gym.Env):
     #statics
     self.failure_count = 0
     self.train_count = 0
+    # score for one episode
+    self.reward_count = 0
 
 
     self.reset()
 
   def _step(self, action):
-    print("step", action)
+    #print("step", action)
     action_item = self.action_list[action] #turbo
 
     from_row = action_item[0]
@@ -104,18 +107,20 @@ class Puzzle6Env(gym.Env):
     if r == 0:
       reward = 1
     else:
-      reward = -10000
+      reward = -1
+
+    self.reward_count = self.reward_count + reward
+    self.train_count = self.train_count + 1
 
     if reward > 0:
-      print("Success after ", self.failure_count, " failures ! \nTrain: ", self.train_count)
+      #print("Success after ", self.failure_count, " failures ! \nTrain: ", self.train_count)
       self.failure_count = 0
     else:
       self.failure_count = self.failure_count + 1
 
-    if self.failure_count > 100:
-      self.episode_over = True
-
-    self.train_count = self.train_count + 1
+    #if self.train_count > 5000:
+      #print("Reward count for", self.train_count, " train:", self.reward_count)
+      #self.episode_over = True
 
     #print("action:", action, "reward:", reward)
     return ob, reward, self.episode_over, {}
@@ -124,6 +129,7 @@ class Puzzle6Env(gym.Env):
 
     self.episode_over = False
     self.train_count = 0
+    self.reward_count = 0
 
     #data
     self.data_stream = ""
@@ -166,7 +172,8 @@ class Puzzle6Env(gym.Env):
     return pole
 
   def get_state(self):
-    ob = np.zeros(self.chesssum)
+    #ob = np.empty((self.rowsum, self.colsum, 3), dtype=np.uint8)
+    ob = np.zeros((self.rowsum, self.colsum, 3), dtype=c_uint8)
 
     max_color_num = 0
     if self.data_stream != '':
@@ -187,11 +194,10 @@ class Puzzle6Env(gym.Env):
           chess_color_num = self.color_num_dict[chess_color_str]
           index = chess_position_x * self.rowsum + chess_position_y
           #print("index:", index, ",chess_position_x:", chess_position_x, ",chess_position_y", chess_position_y)
-          ob[index] = chess_color_num
+          ob[chess_position_x][chess_position_y][0] = chess_color_num
           # print(index, chess_color_str, ob[index])
           if chess_color_num > max_color_num:
             max_color_num = chess_color_num
-    ob = ob / max_color_num
     return ob
 
   def _render(self, mode='human', close=False):
