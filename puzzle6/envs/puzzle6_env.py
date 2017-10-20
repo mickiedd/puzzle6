@@ -101,9 +101,9 @@ class Puzzle6Env(gym.Env):
     ob = self.get_state()
 
     #print(ob)
-    reward = 0
+    reward = -1.0
     if r == 0:
-      reward = 100
+      reward = 1.0
 
     self.reward_count = self.reward_count + reward
     self.train_count = self.train_count + 1
@@ -114,7 +114,7 @@ class Puzzle6Env(gym.Env):
     else:
       self.failure_count = self.failure_count + 1
 
-    if self.train_count >= 10000:
+    if self.train_count >= 5000:
       #print("Reward count for", self.train_count, " train:", self.reward_count)
       self.episode_over = True
 

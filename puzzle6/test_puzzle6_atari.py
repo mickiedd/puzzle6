@@ -31,7 +31,7 @@ class AtariProcessor(Processor):
         assert observation.ndim == 3  # (height, width, channel)
         img = Image.fromarray(observation)
         img = img.resize(INPUT_SHAPE).convert('L')  # resize and convert to grayscale
-        processed_observation = np.array(img)
+        processed_observation = np.array(img) / 255.0
         assert processed_observation.shape == INPUT_SHAPE
         return processed_observation.astype('uint8')  # saves storage in experience memory
 
@@ -43,7 +43,7 @@ class AtariProcessor(Processor):
         return processed_batch
 
     def process_reward(self, reward):
-        return np.clip(reward, 0.0, 100.0)
+        return np.clip(reward, -1.0, 1.0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--mode', choices=['train', 'test'], default='train')
@@ -88,7 +88,7 @@ model.add(Dense(1))
 model.add(Activation('relu'))
 model.add(Dropout(0.2))
 model.add(Dense(nb_actions))
-model.add(Activation('softmax'))
+model.add(Activation('linear'))
 print(model.summary())
 
 # Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
