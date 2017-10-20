@@ -20,12 +20,11 @@ from puzzle6.envs import puzzle6_env
 
 
 INPUT_SHAPE = (9,9)
-WINDOW_LENGTH = 1
+WINDOW_LENGTH = 4
 
 
 class AtariProcessor(Processor):
     def process_observation(self, observation):
-        print("observation.ndim:", observation.ndim)
         assert observation.ndim == 3  # (height, width, channel)
         img = Image.fromarray(observation)
         img = img.resize(INPUT_SHAPE).convert('L')  # resize and convert to grayscale
@@ -67,7 +66,7 @@ elif K.image_dim_ordering() == 'th':
     model.add(Permute((1, 2, 3), input_shape=input_shape))
 else:
     raise RuntimeError('Unknown image_dim_ordering.')
-model.add(Convolution2D(9, 1, 1, subsample=(3, 1)))
+model.add(Convolution2D(6, 1, 1, subsample=(3, 1)))
 model.add(Activation('relu'))
 model.add(Convolution2D(3, 1, 1, subsample=(1, 1)))
 model.add(Activation('relu'))
