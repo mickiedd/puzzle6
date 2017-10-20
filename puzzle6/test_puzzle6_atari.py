@@ -43,7 +43,7 @@ class AtariProcessor(Processor):
         return processed_batch
 
     def process_reward(self, reward):
-        return np.clip(reward, -1., 1.)
+        return np.clip(reward, 0.0, 100.0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--mode', choices=['train', 'test'], default='train')

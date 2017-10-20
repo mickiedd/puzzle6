@@ -114,9 +114,9 @@ class Puzzle6Env(gym.Env):
     else:
       self.failure_count = self.failure_count + 1
 
-    #if self.train_count > 5000:
+    if self.train_count >= 10000:
       #print("Reward count for", self.train_count, " train:", self.reward_count)
-      #self.episode_over = True
+      self.episode_over = True
 
     #print("action:", action, "reward:", reward)
     return ob, reward, self.episode_over, {"reward_count:": self.reward_count}
@@ -190,7 +190,9 @@ class Puzzle6Env(gym.Env):
           chess_color_num = self.color_num_dict[chess_color_str]
           index = chess_position_x * self.rowsum + chess_position_y
           #print("index:", index, ",chess_position_x:", chess_position_x, ",chess_position_y", chess_position_y)
-          ob[chess_position_x][chess_position_y][0] = chess_color_num
+          ob[chess_position_x][chess_position_y][0] = int(chess_color_num / 10.0 * 255.0)
+          ob[chess_position_x][chess_position_y][1] = 255
+          ob[chess_position_x][chess_position_y][2] = 255
           # print(index, chess_color_str, ob[index])
           if chess_color_num > max_color_num:
             max_color_num = chess_color_num
