@@ -105,9 +105,7 @@ class Puzzle6Env(gym.Env):
     #print(ob)
     reward = 0
     if r == 0:
-      reward = 1
-    else:
-      reward = -1
+      reward = 100
 
     self.reward_count = self.reward_count + reward
     self.train_count = self.train_count + 1

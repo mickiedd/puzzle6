@@ -8,6 +8,9 @@ import gym
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute
 from keras.optimizers import Adam
+from keras.optimizers import nadam
+from keras.layers import Dropout, MaxPooling2D
+
 import keras.backend as K
 
 from rl.agents.dqn import DQNAgent
@@ -66,15 +69,24 @@ elif K.image_dim_ordering() == 'th':
     model.add(Permute((1, 2, 3), input_shape=input_shape))
 else:
     raise RuntimeError('Unknown image_dim_ordering.')
-model.add(Convolution2D(6, 1, 1, subsample=(3, 1)))
-model.add(Activation('relu'))
-model.add(Convolution2D(3, 1, 1, subsample=(1, 1)))
-model.add(Activation('relu'))
-model.add(Convolution2D(3, 3, 1, subsample=(1, 1)))
-model.add(Activation('relu'))
+model.add(Convolution2D(1, 1, 1, border_mode='same', activation='relu'))
+model.add(MaxPooling2D(2, 2))
+model.add(Convolution2D(3, 1, 1, border_mode='same', activation='relu'))
+model.add(MaxPooling2D(2, 2))
+model.add(Convolution2D(1, 3, 1, border_mode='same', activation='relu'))
+model.add(MaxPooling2D(2, 2))
+model.add(Convolution2D(3, 3, 1, border_mode='same', activation='relu'))
+#model.add(MaxPooling2D(2, 2))
 model.add(Flatten())
-model.add(Dense(512))
+model.add(Dense(256))
 model.add(Activation('relu'))
+model.add(Dropout(0.2))
+model.add(Dense(128))
+model.add(Activation('relu'))
+model.add(Dropout(0.2))
+model.add(Dense(1))
+model.add(Activation('relu'))
+model.add(Dropout(0.2))
 model.add(Dense(nb_actions))
 model.add(Activation('softmax'))
 print(model.summary())
@@ -101,7 +113,7 @@ policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., valu
 dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory,
                processor=processor, nb_steps_warmup=50000, gamma=.99, target_model_update=10000,
                train_interval=4, delta_clip=1.)
-dqn.compile(Adam(lr=.00025), metrics=['mae'])
+dqn.compile(nadam(lr=.00025), metrics=['mae'])
 
 if args.mode == 'train':
     # Okay, now it's time to learn something! We capture the interrupt exception so that training
