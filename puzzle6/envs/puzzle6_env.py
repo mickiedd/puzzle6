@@ -40,9 +40,7 @@ class Puzzle6Env(gym.Env):
 
     self.gameInstanceRet = None;
     self.episode_over = False
-    low = np.zeros((self.rowsum, self.colsum, 3))
-    high = np.zeros((self.rowsum, self.colsum, 3)) + 1.0
-    self.observation_space = spaces.Box(low, high)
+    self.observation_space = spaces.Box(low=0, high=255, shape=(self.rowsum, self.colsum, 3))
     #self.observation_space = np.zeros(81)
     self.action_space = spaces.Discrete(len(self.action_list))
 
@@ -121,7 +119,7 @@ class Puzzle6Env(gym.Env):
       #self.episode_over = True
 
     #print("action:", action, "reward:", reward)
-    return ob, reward, self.episode_over, {}
+    return ob, reward, self.episode_over, {"reward_count:": self.reward_count}
   def _reset(self):
     print("reset")
 
@@ -205,7 +203,6 @@ class Puzzle6Env(gym.Env):
             self.viewer.close()
             self.viewer = None
             return
-    print(1)
     #start position x
     start_position_x = 100
     #start position y
