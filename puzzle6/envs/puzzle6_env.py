@@ -56,7 +56,10 @@ class Puzzle6Env(gym.Env):
     self.color_dict = {'color(0)': yellow, 'color(1)': red, 'color(2)': brown, 'color(3)': green, 'color(4)': blue, 'color(5)': purple, 'color(6)': white, 'color(7)': None, 'color(8)': None, 'color(9)': None}
     self.color_num_dict = {'color(0)': 1, 'color(1)': 2, 'color(2)': 3, 'color(3)': 4, 'color(4)': 5,
                        'color(5)': 6, 'color(6)': 7, 'color(7)': 0, 'color(8)': 0, 'color(9)': 0}
-    self.to_direction_dict = {0: (-1,1), 1: (0,1), 2: (1,0), 3: (-1,0), 4: (0,-1), 5: (-1,-1), 6: (0,0), 7: (0,0), 8: (0,0)}
+
+    self.to_direction_dict1 = {0: (-1, 0), 1: (-1, 1), 2: (0, 1), 3: (1, 0), 4: (0, -1), 5: (-1, -1), 6: (0, 0), 7: (0, 0), 8: (0, 0)}
+    self.to_direction_dict2 = {0: (-1, 0), 1: (0, 1), 2: (1, 1), 3: (1, 0), 4: (1, -1), 5: (0, -1), 6: (0, 0), 7: (0, 0), 8: (0, 0)}
+
     #graphic
     self.viewer = None
 
@@ -71,6 +74,10 @@ class Puzzle6Env(gym.Env):
 
   def _step(self, action):
     #print("step", action)
+
+    ob = self.get_state()
+    #print(ob)
+
     action_item = self.action_list[action] #turbo
 
     from_row = action_item[0]
@@ -79,16 +86,24 @@ class Puzzle6Env(gym.Env):
 
     item_type = 4
     #delta
-    delta = self.to_direction_dict[to_direction]
-    #print("from_row:", from_row, ", from_col:", from_col, " to_direction:", to_direction, " delta:", delta)
+    if from_col % 2 == 1:
+      delta = self.to_direction_dict2[to_direction]
+    else:
+      delta = self.to_direction_dict1[to_direction]
     to_row = from_row + delta[0]
     to_col = from_col + delta[1]
     value1 = 0
     value2 = 0
     op = 0
+
+
     #print("Take action ", self.train_count, " from:", from_row, from_col, ", to:", to_row, to_col)
     #get the result from that action
     r = int(c_int(self.dll.we6_game_input_by_detail(self.gameInstanceRet, op, item_type, from_row, from_col, to_row, to_col, value1, value2)).value)
+
+    #if r == 0:
+      #print("Reward OK, from_row:", from_row, ", from_col:", from_col, " to_row:", to_row, " to_col:", to_col)
+
 
     len3 = c_int()
     self.data_stream = str(c_char_p(self.dll.we6_board_nodes_data(self.gameInstanceRet, byref(len3))).value)
@@ -98,7 +113,6 @@ class Puzzle6Env(gym.Env):
 
 
 
-    ob = self.get_state()
 
     #print(ob)
     reward = -1.0
@@ -114,7 +128,7 @@ class Puzzle6Env(gym.Env):
     else:
       self.failure_count = self.failure_count + 1
 
-    if self.train_count >= 5000:
+    if self.train_count >= 10000:
       #print("Reward count for", self.train_count, " train:", self.reward_count)
       self.episode_over = True
 
@@ -152,9 +166,9 @@ class Puzzle6Env(gym.Env):
     print("get nodes data")
     self.data_stream = str(c_char_p(self.dll.we6_board_nodes_data(self.gameInstanceRet, byref(len3))).value)
     state = self.get_state()
-    print("Original:")
-    print(state)
-    print(len3)
+    #print("Original:")
+    #print(state)
+    #print(len3)
     print("=========")
 
     return state
@@ -190,7 +204,7 @@ class Puzzle6Env(gym.Env):
           chess_color_num = self.color_num_dict[chess_color_str]
           index = chess_position_x * self.rowsum + chess_position_y
           #print("index:", index, ",chess_position_x:", chess_position_x, ",chess_position_y", chess_position_y)
-          ob[chess_position_x][chess_position_y][0] = int(chess_color_num / 10.0 * 255.0)
+          ob[chess_position_x][chess_position_y][0] = chess_color_num
           ob[chess_position_x][chess_position_y][1] = 255
           ob[chess_position_x][chess_position_y][2] = 255
           # print(index, chess_color_str, ob[index])

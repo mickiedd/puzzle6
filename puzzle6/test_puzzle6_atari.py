@@ -31,7 +31,7 @@ class AtariProcessor(Processor):
         assert observation.ndim == 3  # (height, width, channel)
         img = Image.fromarray(observation)
         img = img.resize(INPUT_SHAPE).convert('L')  # resize and convert to grayscale
-        processed_observation = np.array(img) / 255.0
+        processed_observation = np.array(img)
         assert processed_observation.shape == INPUT_SHAPE
         return processed_observation.astype('uint8')  # saves storage in experience memory
 
@@ -61,39 +61,22 @@ print("nb_actions:", nb_actions)
 # Next, we build our model. We use the same model that was described by Mnih et al. (2015).
 input_shape = (WINDOW_LENGTH,) + INPUT_SHAPE
 model = Sequential()
-if K.image_dim_ordering() == 'tf':
-    # (width, height, channels)
-    model.add(Permute((2, 3, 1), input_shape=input_shape))
-elif K.image_dim_ordering() == 'th':
-    # (channels, width, height)
-    model.add(Permute((1, 2, 3), input_shape=input_shape))
-else:
-    raise RuntimeError('Unknown image_dim_ordering.')
-model.add(Convolution2D(1, 1, 1, border_mode='same', activation='relu'))
-model.add(MaxPooling2D(2, 2))
-model.add(Convolution2D(3, 1, 1, border_mode='same', activation='relu'))
-model.add(MaxPooling2D(2, 2))
-model.add(Convolution2D(1, 3, 1, border_mode='same', activation='relu'))
-model.add(MaxPooling2D(2, 2))
-model.add(Convolution2D(3, 3, 1, border_mode='same', activation='relu'))
-#model.add(MaxPooling2D(2, 2))
-model.add(Flatten())
-model.add(Dense(256))
+model.add(Flatten(input_shape=input_shape))
+model.add(Dense(16))
 model.add(Activation('relu'))
-model.add(Dropout(0.2))
-model.add(Dense(128))
+model.add(Dense(16))
 model.add(Activation('relu'))
-model.add(Dropout(0.2))
-model.add(Dense(1))
+model.add(Dense(16))
 model.add(Activation('relu'))
-model.add(Dropout(0.2))
+model.add(Dense(512))
+model.add(Activation('relu'))
 model.add(Dense(nb_actions))
-model.add(Activation('linear'))
+model.add(Activation('softmax'))
 print(model.summary())
 
 # Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
 # even the metrics!
-memory = SequentialMemory(limit=1000000, window_length=WINDOW_LENGTH)
+memory = SequentialMemory(limit=10000, window_length=WINDOW_LENGTH)
 processor = AtariProcessor()
 
 # Select a policy. We use eps-greedy action selection, which means that a random action is selected
@@ -111,7 +94,7 @@ policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., valu
 # Feel free to give it a try!
 
 dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory,
-               processor=processor, nb_steps_warmup=50000, gamma=.99, target_model_update=10000,
+               processor=processor, nb_steps_warmup=50000, gamma=.99, target_model_update=1000,
                train_interval=4, delta_clip=1.)
 dqn.compile(nadam(lr=.00025), metrics=['mae'])
 

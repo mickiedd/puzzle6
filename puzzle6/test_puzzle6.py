@@ -12,7 +12,7 @@ print(env.observation_space.low)    # 查看 observation 最低取值
 
 # 定义使用 DQN 的算法
 RL = DeepQNetwork(n_actions=env.action_space.n,
-                  n_features=env.observation_space.shape[0],
+                  n_features=9*9*3,
                   learning_rate=0.01, e_greedy=0.9,
                   replace_target_iter=100, memory_size=2000,
                   e_greedy_increment=0.0008,)
