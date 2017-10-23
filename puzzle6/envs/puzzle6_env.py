@@ -39,6 +39,12 @@ class Puzzle6Env(gym.Env):
     pole.add_attr(pole.trans)
     self.viewer.add_geom(pole)
     return pole
+  def fetch_stream_data(self):
+    len = c_int()
+    p = c_char_p(self.dll.we6_board_nodes_data(self.gameInstanceRet, byref(len)))
+    self.data_stream = str(p.value)
+    # free pointer
+    self.dll.we6_free_data(self.gameInstanceRet, p, len)
   def get_state(self):
     #ob = np.empty((self.rowsum, self.colsum, 3), dtype=np.uint8)
     ob = np.zeros((self.rowsum, self.colsum, 3), dtype=c_uint8)
@@ -155,9 +161,8 @@ class Puzzle6Env(gym.Env):
     #get the result from that action
     r = int(c_int(self.dll.we6_game_input_by_detail(self.gameInstanceRet, op, item_type, self.from_grid[0], self.from_grid[1], self.to_grid[0], self.to_grid[1], value1, value2)).value)
 
-
-    len3 = c_int()
-    self.data_stream = str(c_char_p(self.dll.we6_board_nodes_data(self.gameInstanceRet, byref(len3))).value)
+    #fetch next screen data
+    self.fetch_stream_data()
 
     reward = -1.0
     if r == 0:
@@ -172,7 +177,7 @@ class Puzzle6Env(gym.Env):
     else:
       self.failure_count = self.failure_count + 1
 
-    if self.train_count >= 10000:
+    if self.train_count >= 50000:
       #print("Reward count for", self.train_count, " train:", self.reward_count)
       self.episode_over = True
 
@@ -207,14 +212,8 @@ class Puzzle6Env(gym.Env):
     # start the game
     print("start the game")
     self.dll.we6_game_quick_run(self.gameInstanceRet, chessPropertiesTablePath, stageConfigPath, commonPath)
-    len3 = c_int()
-    print("get nodes data")
-    self.data_stream = str(c_char_p(self.dll.we6_board_nodes_data(self.gameInstanceRet, byref(len3))).value)
+    self.fetch_stream_data()
     state = self.get_state()
-    #print("Original:")
-    #print(state)
-    #print(len3)
-    print("=========")
 
     return state
 
