@@ -8,6 +8,7 @@ from keras.optimizers import Adam
 from rl.agents import SARSAAgent
 from rl.policy import BoltzmannQPolicy
 
+from puzzle6.envs import puzzle6_env
 
 ENV_NAME = 'puzzle6-v0'
 
