@@ -22,10 +22,6 @@ from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 from puzzle6.envs import puzzle6_env
 
 
-INPUT_SHAPE = (9,9)
-WINDOW_LENGTH = 4
-
-
 class AtariProcessor(Processor):
     def process_observation(self, observation):
         assert observation.ndim == 3  # (height, width, channel)
@@ -57,6 +53,9 @@ np.random.seed(123)
 env.seed(123)
 nb_actions = env.action_space.n
 print("nb_actions:", nb_actions)
+
+INPUT_SHAPE = (env.observation_space.shape[0],env.observation_space.shape[1])
+WINDOW_LENGTH = 4
 
 # Next, we build our model. We use the same model that was described by Mnih et al. (2015).
 input_shape = (WINDOW_LENGTH,) + INPUT_SHAPE
