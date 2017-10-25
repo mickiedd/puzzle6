@@ -76,8 +76,8 @@ class Puzzle6Env(gym.Env):
     return ob
   def __init__(self):
     print("puzzle6 inited")
-    self.rowsum = 8
-    self.colsum = 8
+    self.rowsum = 4
+    self.colsum = 4
     self.chesssum = self.rowsum * self.colsum
     self.directsum = 6
     self.halfdirectsum = int(self.directsum / 2)
@@ -160,7 +160,8 @@ class Puzzle6Env(gym.Env):
     #print("Take action ", self.train_count, " from:", from_row, from_col, ", to:", to_row, to_col)
     #get the result from that action
     r = int(c_int(self.dll.we6_game_input_by_detail(self.gameInstanceRet, op, item_type, self.from_grid[0], self.from_grid[1], self.to_grid[0], self.to_grid[1], value1, value2)).value)
-
+    self.dll.we6_check_dead_game()
+    is_dead_game = int(c_int(self.dll.we6_is_dead_game()).value)
     #fetch next screen data
     self.fetch_stream_data()
 
@@ -177,7 +178,7 @@ class Puzzle6Env(gym.Env):
     else:
       self.failure_count = self.failure_count + 1
 
-    if self.train_count >= 50000:
+    if self.train_count >= 10000 or is_dead_game > 0:
       #print("Reward count for", self.train_count, " train:", self.reward_count)
       self.episode_over = True
 
@@ -195,7 +196,7 @@ class Puzzle6Env(gym.Env):
     self.data_stream = ""
 
     chessPropertiesTablePath = b"/home/mickie/course/puzzle6/data/LogicData/ChessPropertiesTable.bin"
-    stageConfigPath = b"/home/mickie/Downloads/stage_0002_0000.bin"
+    stageConfigPath = b"/home/mickie/Downloads/stage_4x4.bin"
     commonPath = b"/home/mickie/course/puzzle6/data/DataConfig/"
 
     self.dll = cdll.LoadLibrary('/home/mickie/Downloads/libwe6remove.so')
@@ -212,6 +213,7 @@ class Puzzle6Env(gym.Env):
     # start the game
     print("start the game")
     self.dll.we6_game_quick_run(self.gameInstanceRet, chessPropertiesTablePath, stageConfigPath, commonPath)
+    self.dll.we6_check_dead_game()
     self.fetch_stream_data()
     state = self.get_state()
 

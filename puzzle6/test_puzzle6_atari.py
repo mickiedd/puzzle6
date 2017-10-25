@@ -68,20 +68,20 @@ elif K.image_dim_ordering() == 'th':
     model.add(Permute((1, 2, 3), input_shape=input_shape))
 else:
     raise RuntimeError('Unknown image_dim_ordering.')
-model.add(Convolution2D(input_shape=input_shape, kernel_size=(3,3), filters=32, padding='same'))
+model.add(Convolution2D(input_shape=input_shape, kernel_size=(3,3), filters=256, padding='same'))
 model.add(Activation('relu'))
 model.add(MaxPooling2D(2, 2))
-model.add(Convolution2D(input_shape=(None, 4, 4, 32), kernel_size=(3,3), filters=32, padding='same'))
+model.add(Convolution2D(input_shape=(None, 2, 2, 32), kernel_size=(3,3), filters=256, padding='same'))
 model.add(Activation('relu'))
 model.add(MaxPooling2D(2, 2))
-model.add(Convolution2D(input_shape=(None, 2, 2, 32), kernel_size=(3,3), filters=32, padding='same'))
+model.add(Convolution2D(input_shape=(None, 1, 1, 32), kernel_size=(3,3), filters=256, padding='same'))
 model.add(Activation('relu'))
-model.add(MaxPooling2D(2, 2))
+#model.add(MaxPooling2D(2, 2))
 model.add(Flatten())
-model.add(Dense(512))
+model.add(Dense(128))
 model.add(Activation('relu'))
 model.add(Dropout(0.5))
-model.add(Dense(256))
+model.add(Dense(64))
 model.add(Activation('relu'))
 model.add(Dropout(0.5))
 model.add(Dense(nb_actions))
@@ -110,7 +110,7 @@ policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., valu
 dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory,
                processor=processor, nb_steps_warmup=50000, gamma=.99, target_model_update=1000,
                train_interval=4, delta_clip=1.)
-dqn.compile(nadam(lr=.00025), metrics=['mae'])
+dqn.compile(nadam(lr=.00015), metrics=['mae'])
 
 if args.mode == 'train':
     # Okay, now it's time to learn something! We capture the interrupt exception so that training
