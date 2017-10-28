@@ -1,19 +1,26 @@
+from __future__ import division
+import argparse
+
+from PIL import Image
 import numpy as np
 import gym
 
-from PIL import Image
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute
-from keras.layers import Dropout, MaxPooling2D
 from keras.optimizers import Adam
+from keras.optimizers import nadam
+from keras.layers import Dropout, MaxPooling2D
 
 import keras.backend as K
-from rl.core import Processor
 
-from rl.agents import SARSAAgent
-from rl.policy import BoltzmannQPolicy
+from rl.agents.dqn import DQNAgent
+from rl.policy import LinearAnnealedPolicy, BoltzmannQPolicy, EpsGreedyQPolicy
+from rl.memory import SequentialMemory
+from rl.core import Processor
+from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
 from puzzle6.envs import puzzle6_env
+
 
 class AtariProcessor(Processor):
     def process_observation(self, observation):
@@ -32,19 +39,25 @@ class AtariProcessor(Processor):
         return processed_batch
 
     def process_reward(self, reward):
-        return np.clip(reward, -1.0, 1.0)
+        return reward # np.clip(reward, -1.0, 1.0)
 
-ENV_NAME = 'puzzle6-v0'
+parser = argparse.ArgumentParser()
+parser.add_argument('--mode', choices=['train', 'test'], default='train')
+parser.add_argument('--env-name', type=str, default='puzzle6-v0')
+parser.add_argument('--weights', type=str, default=None)
+args = parser.parse_args()
 
 # Get the environment and extract the number of actions.
-env = gym.make(ENV_NAME)
+env = gym.make(args.env_name)
 np.random.seed(123)
 env.seed(123)
 nb_actions = env.action_space.n
-INPUT_SHAPE = (env.observation_space.shape[0],env.observation_space.shape[1])
-WINDOW_LENGTH = 1
+print("nb_actions:", nb_actions)
 
-# Next, we build a very simple model.
+INPUT_SHAPE = (env.observation_space.shape[0],env.observation_space.shape[1])
+WINDOW_LENGTH = 4
+
+# Next, we build our model. We use the same model that was described by Mnih et al. (2015).
 input_shape = (WINDOW_LENGTH,) + INPUT_SHAPE
 model = Sequential()
 if K.image_dim_ordering() == 'tf':
@@ -55,19 +68,17 @@ elif K.image_dim_ordering() == 'th':
     model.add(Permute((1, 2, 3), input_shape=input_shape))
 else:
     raise RuntimeError('Unknown image_dim_ordering.')
-model.add(Convolution2D(input_shape=input_shape, kernel_size=(3,3), filters=32, padding='same'))
+filter = 512
+model.add(Convolution2D(input_shape=input_shape, kernel_size=(3,3), filters=filter, padding='same'))
 model.add(Activation('relu'))
 model.add(MaxPooling2D(2, 2))
-model.add(Convolution2D(input_shape=(None, 4, 4, 32), kernel_size=(3,3), filters=32, padding='same'))
+model.add(Convolution2D(input_shape=(None, 4, 4, filter), kernel_size=(3,3), filters=filter, padding='same'))
 model.add(Activation('relu'))
 model.add(MaxPooling2D(2, 2))
-model.add(Convolution2D(input_shape=(None, 2, 2, 32), kernel_size=(3,3), filters=32, padding='same'))
+model.add(Convolution2D(input_shape=(None, 2, 2, filter), kernel_size=(3,3), filters=filter, padding='same'))
 model.add(Activation('relu'))
 model.add(MaxPooling2D(2, 2))
 model.add(Flatten())
-model.add(Dense(512))
-model.add(Activation('relu'))
-model.add(Dropout(0.5))
 model.add(Dense(256))
 model.add(Activation('relu'))
 model.add(Dropout(0.5))
@@ -75,19 +86,48 @@ model.add(Dense(nb_actions))
 model.add(Activation('softmax'))
 print(model.summary())
 
-# SARSA does not require a memory.
-policy = BoltzmannQPolicy()
+# Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
+# even the metrics!
+memory = SequentialMemory(limit=10000, window_length=WINDOW_LENGTH)
 processor = AtariProcessor()
-sarsa = SARSAAgent(model=model, nb_actions=nb_actions, nb_steps_warmup=10, policy=policy, processor=processor, train_interval=4)
-sarsa.compile(Adam(lr=1e-5), metrics=['mae'])
 
-# Okay, now it's time to learn something! We visualize the training here for show, but this
-# slows down training quite a lot. You can always safely abort the training prematurely using
-# Ctrl + C.
-sarsa.fit(env, nb_steps=50000000, visualize=False, verbose=2)
+# Select a policy. We use eps-greedy action selection, which means that a random action is selected
+# with probability eps. We anneal eps from 1.0 to 0.1 over the course of 1M steps. This is done so that
+# the agent initially explores the environment (high eps) and then gradually sticks to what it knows
+# (low eps). We also set a dedicated eps value that is used during testing. Note that we set it to 0.05
+# so that the agent still performs some random actions. This ensures that the agent cannot get stuck.
+policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
+                              nb_steps=10000000)
 
-# After training is done, we save the final weights.
-sarsa.save_weights('sarsa_{}_weights.h5f'.format(ENV_NAME), overwrite=True)
+# The trade-off between exploration and exploitation is difficult and an on-going research topic.
+# If you want, you can experiment with the parameters or use a different policy. Another popular one
+# is Boltzmann-style exploration:
+# policy = BoltzmannQPolicy(tau=1.)
+# Feel free to give it a try!
 
-# Finally, evaluate our algorithm for 5 episodes.
-sarsa.test(env, nb_episodes=5, visualize=True)
+dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory,
+               processor=processor, nb_steps_warmup=50000, gamma=.99, target_model_update=1000,
+               train_interval=4, delta_clip=1.)
+dqn.compile(nadam(lr=.00015), metrics=['mae'])
+
+if args.mode == 'train':
+    # Okay, now it's time to learn something! We capture the interrupt exception so that training
+    # can be prematurely aborted. Notice that you can the built-in Keras callbacks!
+    weights_filename = 'dqn_{}_weights.h5f'.format(args.env_name)
+    checkpoint_weights_filename = 'dqn_' + args.env_name + '_weights_{step}.h5f'
+    log_filename = 'dqn_{}_log.json'.format(args.env_name)
+    callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=250000)]
+    callbacks += [FileLogger(log_filename, interval=100)]
+    dqn.fit(env, callbacks=callbacks, nb_steps=17500000, log_interval=50000)
+
+    # After training is done, we save the final weights one more time.
+    dqn.save_weights(weights_filename, overwrite=True)
+
+    # Finally, evaluate our algorithm for 10 episodes.
+    dqn.test(env, nb_episodes=10, visualize=True)
+elif args.mode == 'test':
+    weights_filename = 'dqn_{}_weights.h5f'.format(args.env_name)
+    if args.weights:
+        weights_filename = args.weights
+    dqn.load_weights(weights_filename)
+    dqn.test(env, nb_episodes=100000, visualize=True)

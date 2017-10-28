@@ -46,15 +46,13 @@ class Puzzle6Env(gym.Env):
     # free pointer
     self.dll.we6_free_data(self.gameInstanceRet, p, len)
   def get_state(self):
-    #ob = np.empty((self.rowsum, self.colsum, 3), dtype=np.uint8)
-    ob = np.zeros((self.rowsum, self.colsum, 3), dtype=c_uint8)
+    ob = np.zeros((self.rowsum, self.colsum, self.colorsum), dtype=c_uint8)
     max_color_num = 0
     if self.data_stream != '':
       stream_list = self.data_stream.replace("b'", "").split(',')
       for current_data_stream in stream_list:  # 0|0|color(9)
         # current data
         if current_data_stream != "'":
-          # print(current_data_stream)
           current_data_stream_list = current_data_stream.split('|')
           chess_position_x = int(current_data_stream_list[0])
           chess_position_y = int(current_data_stream_list[1])
@@ -65,23 +63,18 @@ class Puzzle6Env(gym.Env):
           chess_color_str = current_data_stream_list[2]
           # color
           chess_color_num = self.color_num_dict[chess_color_str]
-          index = chess_position_x * self.rowsum + chess_position_y
-          #print("index:", index, ",chess_position_x:", chess_position_x, ",chess_position_y", chess_position_y)
-          ob[chess_position_x][chess_position_y][0] = self.endcode_color(chess_color_num)
-          ob[chess_position_x][chess_position_y][1] = 255
-          ob[chess_position_x][chess_position_y][2] = 255
-          # print(index, chess_color_str, ob[index])
+          ob[chess_position_x][chess_position_y][chess_color_num] = 1
           if chess_color_num > max_color_num:
             max_color_num = chess_color_num
     return ob
   def __init__(self):
     print("puzzle6 inited")
-    self.rowsum = 4
-    self.colsum = 4
+    self.rowsum = 8
+    self.colsum = 8
     self.chesssum = self.rowsum * self.colsum
     self.directsum = 6
     self.halfdirectsum = int(self.directsum / 2)
-    self.colorsum = 5
+    self.colorsum = 8
     self.chesses = {}
     self.from_grid = (0, 0)
     self.to_grid = (0, 0)
@@ -93,8 +86,7 @@ class Puzzle6Env(gym.Env):
     self.chess_height = 30
     self.chess_bargin = 5
     self.current_state = None
-    #action id to real actions(x, y, position)
-    action_count = self.rowsum * self.colsum * self.halfdirectsum
+    self.last_time_reward = 0.0
     self.action_list = []
     for x in range(self.rowsum):
       for y in range(self.colsum):
@@ -102,11 +94,9 @@ class Puzzle6Env(gym.Env):
           if not self.is_border(x, y, a):
             action_item = (x, y, a)
             self.action_list.append(action_item)
-    #len self.action_list 243
     self.gameInstanceRet = None;
     self.episode_over = False
-    self.observation_space = spaces.Box(low=0, high=255, shape=(self.rowsum, self.colsum, 3))
-    #self.observation_space = np.zeros(81)
+    self.observation_space = spaces.Box(low=0, high=255, shape=(self.rowsum, self.colsum, self.colorsum))
     self.action_space = spaces.Discrete(len(self.action_list))
     #color dictionary
     yellow = self.get_color(255, 255, 128)
@@ -131,11 +121,7 @@ class Puzzle6Env(gym.Env):
     self.reset()
 
   def _step(self, action):
-    #print("step", action)
-
     self.current_state = self.get_state()
-    #print(ob)
-
     action_item = self.action_list[action] #turbo
 
     from_row = action_item[0]
@@ -160,14 +146,18 @@ class Puzzle6Env(gym.Env):
     #print("Take action ", self.train_count, " from:", from_row, from_col, ", to:", to_row, to_col)
     #get the result from that action
     r = int(c_int(self.dll.we6_game_input_by_detail(self.gameInstanceRet, op, item_type, self.from_grid[0], self.from_grid[1], self.to_grid[0], self.to_grid[1], value1, value2)).value)
-    self.dll.we6_check_dead_game()
+    #self.dll.we6_check_dead_game()
     is_dead_game = int(c_int(self.dll.we6_is_dead_game()).value)
     #fetch next screen data
     self.fetch_stream_data()
 
-    reward = -1.0
+    reward = 0 # - self.last_time_reward
     if r == 0:
-      reward = 1.0
+      reward = 1
+    if reward > 0:
+      reward = 1
+
+    self.last_time_reward = r
 
     self.reward_count = self.reward_count + reward
     self.train_count = self.train_count + 1
@@ -178,25 +168,24 @@ class Puzzle6Env(gym.Env):
     else:
       self.failure_count = self.failure_count + 1
 
-    if self.train_count >= 10000 or is_dead_game > 0:
+    if self.train_count >= 5000 or is_dead_game > 0:
       #print("Reward count for", self.train_count, " train:", self.reward_count)
       self.episode_over = True
 
-    #print("action:", action, "reward:", reward)
-    #, "from": self.from_grid, "to": self.to_grid
     return self.current_state, reward, self.episode_over, {"reward_count": self.reward_count}
   def _reset(self):
-    print("reset")
+    print("\nreset")
 
     self.episode_over = False
     self.train_count = 0
     self.reward_count = 0
+    self.last_time_reward = 0.0
 
     #data
     self.data_stream = ""
 
     chessPropertiesTablePath = b"/home/mickie/course/puzzle6/data/LogicData/ChessPropertiesTable.bin"
-    stageConfigPath = b"/home/mickie/Downloads/stage_4x4.bin"
+    stageConfigPath = b"/home/mickie/Downloads/stage_0002_0000.bin"
     commonPath = b"/home/mickie/course/puzzle6/data/DataConfig/"
 
     self.dll = cdll.LoadLibrary('/home/mickie/Downloads/libwe6remove.so')
@@ -213,7 +202,7 @@ class Puzzle6Env(gym.Env):
     # start the game
     print("start the game")
     self.dll.we6_game_quick_run(self.gameInstanceRet, chessPropertiesTablePath, stageConfigPath, commonPath)
-    self.dll.we6_check_dead_game()
+    #self.dll.we6_check_dead_game()
     self.fetch_stream_data()
     state = self.get_state()
 
@@ -236,8 +225,10 @@ class Puzzle6Env(gym.Env):
           #print(single_state)
           chess_position_x = i
           chess_position_y = j
-          chess_color_num = single_state[0]
-          chess_color_str = "color(" + str(self.decode_color(chess_color_num) - 1) + ")"
+          for k in range(self.colorsum):
+            if single_state[k] > 0:
+              chess_color_num = k
+          chess_color_str = "color(" + str(chess_color_num - 1) + ")"
           #print(chess_position_x, chess_position_y, chess_color_str)
           # color
           chess_color = self.color_dict[chess_color_str]

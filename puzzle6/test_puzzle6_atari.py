@@ -6,11 +6,9 @@ import numpy as np
 import gym
 
 from keras.models import Sequential
-from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute
-from keras.optimizers import Adam
-from keras.optimizers import nadam
+from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute, Reshape
 from keras.layers import Dropout, MaxPooling2D
-
+from keras.optimizers import Adam
 import keras.backend as K
 
 from rl.agents.dqn import DQNAgent
@@ -21,25 +19,16 @@ from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
 from puzzle6.envs import puzzle6_env
 
-
-class AtariProcessor(Processor):
+class Puzzle6Processor(Processor):
     def process_observation(self, observation):
-        assert observation.ndim == 3  # (height, width, channel)
-        img = Image.fromarray(observation)
-        img = img.resize(INPUT_SHAPE).convert('L')  # resize and convert to grayscale
-        processed_observation = np.array(img)
-        assert processed_observation.shape == INPUT_SHAPE
+        processed_observation = np.array(observation)
         return processed_observation.astype('uint8')  # saves storage in experience memory
 
     def process_state_batch(self, batch):
-        # We could perform this processing step in `process_observation`. In this case, however,
-        # we would need to store a `float32` array instead, which is 4x more memory intensive than
-        # an `uint8` array. This matters if we store 1M observations.
-        processed_batch = batch.astype('float32') / 255.
-        return processed_batch
+        return batch
 
     def process_reward(self, reward):
-        return np.clip(reward, -1.0, 1.0)
+        return reward
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--mode', choices=['train', 'test'], default='train')
@@ -52,36 +41,25 @@ env = gym.make(args.env_name)
 np.random.seed(123)
 env.seed(123)
 nb_actions = env.action_space.n
+WINDOW_LENGTH = 1
+input_shape = env.observation_space.shape
 print("nb_actions:", nb_actions)
 
-INPUT_SHAPE = (env.observation_space.shape[0],env.observation_space.shape[1])
-WINDOW_LENGTH = 4
-
 # Next, we build our model. We use the same model that was described by Mnih et al. (2015).
-input_shape = (WINDOW_LENGTH,) + INPUT_SHAPE
 model = Sequential()
-if K.image_dim_ordering() == 'tf':
-    # (width, height, channels)
-    model.add(Permute((2, 3, 1), input_shape=input_shape))
-elif K.image_dim_ordering() == 'th':
-    # (channels, width, height)
-    model.add(Permute((1, 2, 3), input_shape=input_shape))
-else:
-    raise RuntimeError('Unknown image_dim_ordering.')
-model.add(Convolution2D(input_shape=input_shape, kernel_size=(3,3), filters=256, padding='same'))
+filter = 512
+model.add(Reshape(input_shape, input_shape=(1,) + input_shape))
+model.add(Convolution2D(input_shape=input_shape, kernel_size=(3,3), filters=filter, padding='same'))
 model.add(Activation('relu'))
 model.add(MaxPooling2D(2, 2))
-model.add(Convolution2D(input_shape=(None, 2, 2, 32), kernel_size=(3,3), filters=256, padding='same'))
+model.add(Convolution2D(input_shape=(None, 4, 4, filter), kernel_size=(3,3), filters=filter, padding='same'))
 model.add(Activation('relu'))
 model.add(MaxPooling2D(2, 2))
-model.add(Convolution2D(input_shape=(None, 1, 1, 32), kernel_size=(3,3), filters=256, padding='same'))
+model.add(Convolution2D(input_shape=(None, 2, 2, filter), kernel_size=(3,3), filters=filter, padding='same'))
 model.add(Activation('relu'))
-#model.add(MaxPooling2D(2, 2))
+model.add(MaxPooling2D(2, 2))
 model.add(Flatten())
-model.add(Dense(128))
-model.add(Activation('relu'))
-model.add(Dropout(0.5))
-model.add(Dense(64))
+model.add(Dense(256))
 model.add(Activation('relu'))
 model.add(Dropout(0.5))
 model.add(Dense(nb_actions))
@@ -90,8 +68,8 @@ print(model.summary())
 
 # Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
 # even the metrics!
-memory = SequentialMemory(limit=10000, window_length=WINDOW_LENGTH)
-processor = AtariProcessor()
+memory = SequentialMemory(limit=1000000, window_length=WINDOW_LENGTH)
+processor = Puzzle6Processor()
 
 # Select a policy. We use eps-greedy action selection, which means that a random action is selected
 # with probability eps. We anneal eps from 1.0 to 0.1 over the course of 1M steps. This is done so that
@@ -99,7 +77,7 @@ processor = AtariProcessor()
 # (low eps). We also set a dedicated eps value that is used during testing. Note that we set it to 0.05
 # so that the agent still performs some random actions. This ensures that the agent cannot get stuck.
 policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
-                              nb_steps=10000000)
+                              nb_steps=1000000)
 
 # The trade-off between exploration and exploitation is difficult and an on-going research topic.
 # If you want, you can experiment with the parameters or use a different policy. Another popular one
@@ -108,9 +86,9 @@ policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., valu
 # Feel free to give it a try!
 
 dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory,
-               processor=processor, nb_steps_warmup=50000, gamma=.99, target_model_update=1000,
+               processor=processor, nb_steps_warmup=50000, gamma=.99, target_model_update=10000,
                train_interval=4, delta_clip=1.)
-dqn.compile(nadam(lr=.00015), metrics=['mae'])
+dqn.compile(Adam(lr=.00025), metrics=['mae'])
 
 if args.mode == 'train':
     # Okay, now it's time to learn something! We capture the interrupt exception so that training
@@ -120,7 +98,7 @@ if args.mode == 'train':
     log_filename = 'dqn_{}_log.json'.format(args.env_name)
     callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=250000)]
     callbacks += [FileLogger(log_filename, interval=100)]
-    dqn.fit(env, callbacks=callbacks, nb_steps=17500000, log_interval=50000)
+    dqn.fit(env, callbacks=callbacks, nb_steps=1750000, log_interval=10000)
 
     # After training is done, we save the final weights one more time.
     dqn.save_weights(weights_filename, overwrite=True)
