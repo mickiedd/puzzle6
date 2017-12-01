@@ -24,3 +24,7 @@ tqdm
 sklearn
 
 matplotlib
+
+# 训练集和测试集获取方法
+
+https://www.kaggle.com/c/dogs-vs-cats-redux-kernels-edition/data
